@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: purplle-sis-api
+    runtime: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn api.main:app --host 0.0.0.0 --port ${PORT}"
+    envVars:
+      - key: MONGO_URI
+        value: "mongodb://localhost:27017"
+      - key: MONGO_DB
+        value: "purplle_sis"
+
+  # Runs the synthetic pipeline to continuously populate MongoDB (easy to deploy without CCTV/video).
+  - type: worker
+    name: purplle-sis-pipeline
+    runtime: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python -m src.pipeline"
+    envVars:
+      - key: MONGO_URI
+        value: "mongodb://localhost:27017"
+      - key: MONGO_DB
+        value: "purplle_sis"
+      - key: PIPELINE_CAMERA_ID
+        value: "CAM_1"
+      - key: PIPELINE_SOURCE
+        value: "" 
+
