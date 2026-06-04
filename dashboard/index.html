@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Purplle SIS — Store Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #0a0b0f;
+    --surface:  #12141a;
+    --border:   #1e2130;
+    --accent:   #ff3d6e;
+    --accent2:  #00e5c3;
+    --warn:     #ffb547;
+    --text:     #e8eaf0;
+    --muted:    #5a6080;
+    --mono:     'DM Mono', monospace;
+    --sans:     'Syne', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* grid scan-line overlay */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+      repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,61,110,.03) 40px),
+      repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(0,229,195,.02) 40px);
+    pointer-events: none; z-index: 0;
+  }
+
+  header {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; gap: 1.5rem;
+    padding: .75rem 2rem;
+    background: rgba(10,11,15,.9);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+  }
+  .logo { font-size: 1.3rem; font-weight: 800; letter-spacing: -.03em; }
+  .logo span { color: var(--accent); }
+  .badge {
+    font-family: var(--mono); font-size: .65rem; font-weight: 500;
+    padding: .2rem .55rem; border-radius: 3px;
+    background: rgba(255,61,110,.12); color: var(--accent);
+    border: 1px solid rgba(255,61,110,.3);
+  }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted);
+    margin-left: auto;
+    transition: background .3s;
+  }
+  .status-dot.live { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); }
+  #status-label { font-family: var(--mono); font-size: .7rem; color: var(--muted); }
+
+  main {
+    position: relative; z-index: 1;
+    max-width: 1400px; margin: 0 auto;
+    padding: 2rem;
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 1rem;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    position: relative;
+    overflow: hidden;
+    transition: border-color .2s;
+  }
+  .card:hover { border-color: #2e3348; }
+  .card::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,.015) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .card-label {
+    font-family: var(--mono); font-size: .65rem; letter-spacing: .12em;
+    color: var(--muted); text-transform: uppercase; margin-bottom: .75rem;
+  }
+  .big-num {
+    font-size: 3rem; font-weight: 800; line-height: 1;
+    letter-spacing: -.04em;
+  }
+  .big-num .unit { font-size: 1rem; color: var(--muted); margin-left: .25rem; font-weight: 400; }
+  .delta {
+    font-family: var(--mono); font-size: .75rem; margin-top: .4rem;
+    color: var(--muted);
+  }
+  .delta.up   { color: var(--accent2); }
+  .delta.down { color: var(--accent); }
+
+  /* layout spans */
+  .span-3  { grid-column: span 3; }
+  .span-4  { grid-column: span 4; }
+  .span-6  { grid-column: span 6; }
+  .span-8  { grid-column: span 8; }
+  .span-12 { grid-column: span 12; }
+
+  /* Zone occupancy bars */
+  .zone-row {
+    display: flex; align-items: center; gap: .75rem;
+    margin-bottom: .55rem; font-size: .8rem;
+  }
+  .zone-name { width: 140px; color: var(--muted); font-family: var(--mono); font-size: .7rem; flex-shrink: 0; }
+  .bar-track { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; transition: width .6s cubic-bezier(.25,.8,.25,1); }
+  .bar-fill.high   { background: var(--accent); }
+  .bar-fill.medium { background: var(--warn); }
+  .bar-fill.low    { background: var(--accent2); }
+  .zone-count { width: 24px; text-align: right; font-family: var(--mono); font-size: .75rem; }
+
+  /* Anomaly list */
+  .anomaly-row {
+    display: flex; align-items: flex-start; gap: .75rem;
+    padding: .6rem 0; border-bottom: 1px solid var(--border);
+    animation: fadeIn .4s ease;
+  }
+  .anomaly-row:last-child { border-bottom: none; }
+  .sev-pill {
+    font-family: var(--mono); font-size: .6rem; font-weight: 500; letter-spacing: .08em;
+    padding: .15rem .45rem; border-radius: 3px; flex-shrink: 0; margin-top: .1rem;
+    text-transform: uppercase;
+  }
+  .sev-pill.critical { background: rgba(255,61,110,.15); color: var(--accent); border: 1px solid rgba(255,61,110,.3); }
+  .sev-pill.warning  { background: rgba(255,181,71,.1);  color: var(--warn);   border: 1px solid rgba(255,181,71,.25); }
+  .sev-pill.info     { background: rgba(0,229,195,.1);   color: var(--accent2);border: 1px solid rgba(0,229,195,.25); }
+  .anomaly-desc { flex: 1; font-size: .78rem; line-height: 1.4; }
+  .anomaly-meta { font-family: var(--mono); font-size: .62rem; color: var(--muted); margin-top: .2rem; }
+  .anomaly-ts   { font-family: var(--mono); font-size: .65rem; color: var(--muted); flex-shrink: 0; white-space: nowrap; }
+
+  /* Heatmap sparkline */
+  .sparkline { width: 100%; height: 60px; display: block; }
+
+  /* Mini chart (canvas) */
+  canvas.chart { width: 100%; height: 120px; display: block; }
+
+  /* Live event feed */
+  #event-feed {
+    height: 200px; overflow-y: auto;
+    font-family: var(--mono); font-size: .68rem; line-height: 1.7;
+    color: var(--muted);
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  .event-line { padding: .1rem 0; }
+  .event-line .ev-ts  { color: var(--border); }
+  .event-line .ev-cam { color: var(--accent2); }
+  .event-line .ev-zone{ color: var(--warn); }
+  .event-line .ev-type{ color: var(--text); }
+  .event-line .ev-count{ color: var(--accent); }
+
+  /* Metrics row */
+  .metric-pair { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: .45rem; }
+  .metric-key  { font-family: var(--mono); font-size: .68rem; color: var(--muted); }
+  .metric-val  { font-size: .9rem; font-weight: 700; }
+
+  /* Refresh controls */
+  .controls { display: flex; gap: .5rem; margin-left: auto; }
+  .btn {
+    font-family: var(--mono); font-size: .65rem; padding: .3rem .7rem;
+    border-radius: 4px; cursor: pointer; border: 1px solid var(--border);
+    background: transparent; color: var(--muted); transition: all .15s;
+  }
+  .btn:hover { border-color: var(--accent2); color: var(--accent2); }
+  .btn.active { background: rgba(0,229,195,.1); color: var(--accent2); border-color: var(--accent2); }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50% { opacity: .4; }
+  }
+  .loading { animation: pulse 1.5s infinite; }
+
+  @media (max-width: 900px) {
+    .span-3,.span-4,.span-6,.span-8 { grid-column: span 12; }
+    main { padding: 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Purplle <span>SIS</span></div>
+  <div class="badge">STORE INTELLIGENCE</div>
+  <div id="window-btns" class="controls">
+    <button class="btn active" onclick="setWindow('15m')">15m</button>
+    <button class="btn" onclick="setWindow('60m')">1h</button>
+    <button class="btn" onclick="setWindow('6h')">6h</button>
+    <button class="btn" onclick="setWindow('24h')">24h</button>
+  </div>
+  <span id="status-label">connecting…</span>
+  <div class="status-dot" id="status-dot"></div>
+</header>
+
+<main>
+  <!-- KPI: Total Occupancy -->
+  <div class="card span-3">
+    <div class="card-label">Live Occupancy</div>
+    <div class="big-num" id="kpi-occupancy">—<span class="unit">ppl</span></div>
+    <div class="delta" id="kpi-occupancy-delta">fetching…</div>
+  </div>
+
+  <!-- KPI: Entries -->
+  <div class="card span-3">
+    <div class="card-label">Entries <span id="footfall-window" style="color:var(--accent2)">/ 60m</span></div>
+    <div class="big-num" id="kpi-entries">—</div>
+    <div class="delta up" id="kpi-entries-delta"></div>
+  </div>
+
+  <!-- KPI: Exits -->
+  <div class="card span-3">
+    <div class="card-label">Exits <span style="opacity:.5">/ window</span></div>
+    <div class="big-num" id="kpi-exits">—</div>
+    <div class="delta" id="kpi-exits-delta"></div>
+  </div>
+
+  <!-- KPI: Anomalies -->
+  <div class="card span-3">
+    <div class="card-label">Active Anomalies</div>
+    <div class="big-num" id="kpi-anomalies" style="color:var(--accent)">—</div>
+    <div class="delta" id="kpi-critical" style="color:var(--accent)"></div>
+  </div>
+
+  <!-- Zone Occupancy Bars -->
+  <div class="card span-6">
+    <div class="card-label">Zone Occupancy</div>
+    <div id="zone-bars" class="loading">Loading zones…</div>
+  </div>
+
+  <!-- Dwell Time -->
+  <div class="card span-6">
+    <div class="card-label">Avg Dwell Time — top zones</div>
+    <div id="dwell-metrics"></div>
+  </div>
+
+  <!-- Anomaly Feed -->
+  <div class="card span-8">
+    <div class="card-label">Recent Anomalies</div>
+    <div id="anomaly-list" class="loading">Fetching anomalies…</div>
+  </div>
+
+  <!-- Heatmap sparkline -->
+  <div class="card span-4">
+    <div class="card-label">Motion Heatmap — skincare_aisle</div>
+    <svg class="sparkline" id="spark-svg" viewBox="0 0 280 60" preserveAspectRatio="none"></svg>
+    <div style="font-family:var(--mono);font-size:.62rem;color:var(--muted);margin-top:.5rem" id="spark-label">—</div>
+  </div>
+
+  <!-- Live Event Feed -->
+  <div class="card span-12">
+    <div class="card-label">Live Event Stream &nbsp;<span id="ws-badge" style="font-family:var(--mono);font-size:.62rem;color:var(--muted)">websocket: —</span></div>
+    <div id="event-feed"></div>
+  </div>
+</main>
+
+<script>
+const API = '';  // same origin; change to 'http://localhost:8000' for dev
+
+let currentWindow = '60m';
+let ws = null;
+
+// ── utility ──────────────────────────────────────────────────────────────────
+function fmtTs(iso) {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  } catch { return iso; }
+}
+
+function setWindow(w) {
+  currentWindow = w;
+  document.querySelectorAll('#window-btns .btn').forEach(b => {
+    b.classList.toggle('active', b.textContent === w);
+  });
+  document.getElementById('footfall-window').textContent = `/ ${w}`;
+  fetchAll();
+}
+
+// ── API fetchers ──────────────────────────────────────────────────────────────
+async function fetchOccupancy() {
+  try {
+    const r = await fetch(`${API}/api/v1/store/occupancy`);
+    const d = await r.json();
+    document.getElementById('kpi-occupancy').innerHTML =
+      `${d.total}<span class="unit">ppl</span>`;
+    document.getElementById('kpi-occupancy-delta').textContent =
+      `updated ${fmtTs(d.timestamp)}`;
+    renderZoneBars(d.zones);
+  } catch(e) { console.error('occupancy', e); }
+}
+
+async function fetchFootfall() {
+  try {
+    const r = await fetch(`${API}/api/v1/store/footfall?window=${currentWindow}`);
+    const d = await r.json();
+    document.getElementById('kpi-entries').textContent = d.entries;
+    document.getElementById('kpi-exits').textContent   = d.exits;
+    const net = d.net;
+    const el = document.getElementById('kpi-exits-delta');
+    el.textContent = `net ${net >= 0 ? '+' : ''}${net}`;
+    el.className = `delta ${net >= 0 ? 'up' : 'down'}`;
+    document.getElementById('kpi-entries-delta').textContent =
+      d.peak_at ? `peak ${d.peak_occupancy} @ ${fmtTs(d.peak_at)}` : '';
+  } catch(e) { console.error('footfall', e); }
+}
+
+async function fetchAnomalies() {
+  try {
+    const r = await fetch(`${API}/api/v1/anomalies?limit=8`);
+    const d = await r.json();
+    document.getElementById('kpi-anomalies').textContent = d.total;
+    const crit = (d.anomalies || []).filter(a => a.severity === 'critical').length;
+    document.getElementById('kpi-critical').textContent =
+      crit > 0 ? `${crit} critical` : 'all clear';
+
+    const el = document.getElementById('anomaly-list');
+    if (!d.anomalies || d.anomalies.length === 0) {
+      el.innerHTML = '<div style="color:var(--muted);font-size:.8rem;padding:.5rem 0">No anomalies detected.</div>';
+      return;
+    }
+    el.innerHTML = d.anomalies.map(a => `
+      <div class="anomaly-row">
+        <span class="sev-pill ${a.severity}">${a.severity}</span>
+        <div class="anomaly-desc">
+          <strong>${(a.anomaly_type || a.type || '').replace(/_/g,' ')}</strong>
+          ${a.description ? `— ${a.description}` : ''}
+          <div class="anomaly-meta">
+            cam: ${a.camera_id || a.camera} &nbsp;|&nbsp;
+            conf: ${((a.confidence||0)*100).toFixed(0)}%
+          </div>
+        </div>
+        <span class="anomaly-ts">${fmtTs(a.timestamp || a.ts)}</span>
+      </div>`).join('');
+  } catch(e) { console.error('anomalies', e); }
+}
+
+async function fetchDwell() {
+  const zones = ['skincare_aisle','makeup_aisle','billing_counter'];
+  const el = document.getElementById('dwell-metrics');
+  el.innerHTML = '';
+  for (const z of zones) {
+    try {
+      const r = await fetch(`${API}/api/v1/zones/${z}/dwell`);
+      const d = await r.json();
+      el.innerHTML += `
+        <div class="metric-pair">
+          <span class="metric-key">${z.replace(/_/g,' ')}</span>
+          <span class="metric-val">${d.avg_dwell_s}s
+            <span style="font-size:.7rem;color:var(--muted);font-weight:400">
+              p50=${d.p50}s p90=${d.p90}s
+            </span>
+          </span>
+        </div>`;
+    } catch {}
+  }
+}
+
+async function fetchHeatmap() {
+  try {
+    const r = await fetch(`${API}/api/v1/heatmap/skincare_aisle?resolution=5m`);
+    const d = await r.json();
+    const pts = (d.series || []).map(p => p.motion_pct);
+    if (!pts.length) return;
+    drawSparkline(pts);
+    const last = pts[pts.length-1];
+    document.getElementById('spark-label').textContent =
+      `current: ${last.toFixed(1)}%  avg: ${(pts.reduce((a,b)=>a+b,0)/pts.length).toFixed(1)}%`;
+  } catch(e) { console.error('heatmap', e); }
+}
+
+// ── Zone bars renderer ───────────────────────────────────────────────────────
+function renderZoneBars(zones) {
+  const max = Math.max(...Object.values(zones), 1);
+  const el = document.getElementById('zone-bars');
+  el.classList.remove('loading');
+  el.innerHTML = Object.entries(zones).map(([zone, count]) => {
+    const pct = (count / max) * 100;
+    const cls = pct > 70 ? 'high' : pct > 35 ? 'medium' : 'low';
+    return `
+      <div class="zone-row">
+        <span class="zone-name">${zone.replace(/_/g,' ')}</span>
+        <div class="bar-track">
+          <div class="bar-fill ${cls}" style="width:${pct}%"></div>
+        </div>
+        <span class="zone-count">${count}</span>
+      </div>`;
+  }).join('');
+}
+
+// ── Sparkline SVG ─────────────────────────────────────────────────────────────
+function drawSparkline(values) {
+  if (!values.length) return;
+  const W = 280, H = 60, pad = 4;
+  const mn = Math.min(...values), mx = Math.max(...values, mn+1);
+  const xs = values.map((_, i) => pad + i * (W - 2*pad) / (values.length - 1 || 1));
+  const ys = values.map(v => H - pad - (v - mn) / (mx - mn) * (H - 2*pad));
+  const pts = xs.map((x, i) => `${x},${ys[i]}`).join(' ');
+  const fillPts = `${xs[0]},${H} ` + pts + ` ${xs[xs.length-1]},${H}`;
+  document.getElementById('spark-svg').innerHTML = `
+    <defs>
+      <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#ff3d6e" stop-opacity=".35"/>
+        <stop offset="100%" stop-color="#ff3d6e" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <polygon points="${fillPts}" fill="url(#sg)"/>
+    <polyline points="${pts}" fill="none" stroke="#ff3d6e" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${xs[xs.length-1]}" cy="${ys[ys.length-1]}" r="3" fill="#ff3d6e"/>`;
+}
+
+// ── WebSocket live feed ───────────────────────────────────────────────────────
+function appendEvent(msg) {
+  const feed = document.getElementById('event-feed');
+  const t = new Date().toLocaleTimeString('en-IN', {hour12:false});
+  const zones   = msg.zones ? Object.entries(msg.zones).map(([z,c]) => `<span class="ev-zone">${z}</span>=<span class="ev-count">${c}</span>`).join(' ') : `<span class="ev-zone">${msg.zone||''}</span>=<span class="ev-count">${msg.count||''}</span>`;
+  const line = document.createElement('div');
+  line.className = 'event-line';
+  line.innerHTML = `<span class="ev-ts">${t}</span> <span class="ev-cam">${msg.camera_id||'ws'}</span> <span class="ev-type">${msg.event_type}</span> ${zones}`;
+  feed.prepend(line);
+  if (feed.children.length > 80) feed.removeChild(feed.lastChild);
+}
+
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const host  = location.host || 'localhost:8000';
+  const url   = `${proto}://${host}/ws/v1/live`;
+  document.getElementById('ws-badge').textContent = `websocket: connecting…`;
+
+  ws = new WebSocket(url);
+
+  ws.onopen = () => {
+    document.getElementById('status-dot').classList.add('live');
+    document.getElementById('status-label').textContent = 'live';
+    document.getElementById('ws-badge').textContent = `websocket: connected`;
+  };
+
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      appendEvent(msg);
+      // Update occupancy from WS push
+      if (msg.zones) {
+        const total = Object.values(msg.zones).reduce((a,b)=>a+b,0);
+        document.getElementById('kpi-occupancy').innerHTML =
+          `${total}<span class="unit">ppl</span>`;
+        renderZoneBars(msg.zones);
+      }
+    } catch {}
+  };
+
+  ws.onclose = () => {
+    document.getElementById('status-dot').classList.remove('live');
+    document.getElementById('status-label').textContent = 'disconnected';
+    document.getElementById('ws-badge').textContent = `websocket: reconnecting…`;
+    setTimeout(connectWS, 4000);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+// ── Fetch all ─────────────────────────────────────────────────────────────────
+async function fetchAll() {
+  await Promise.all([
+    fetchOccupancy(),
+    fetchFootfall(),
+    fetchAnomalies(),
+    fetchDwell(),
+    fetchHeatmap(),
+  ]);
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+fetchAll();
+setInterval(fetchAll, 10_000);   // refresh every 10s
+connectWS();
+</script>
+</body>
+</html>
